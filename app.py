@@ -28,10 +28,9 @@ for i, layer in enumerate(layers):
             btn_cols = st.columns(3)
             for j, idx in enumerate(indices):
                 node_id = f"{t}{layer}.{idx}"
-                # 判斷是否被選中
-                type_color = colors[t]
-                is_selected = node_id in st.session_state.selected
                 
+                # 判斷是否被選中
+                is_selected = node_id in st.session_state.selected
                 label = f"📍 {node_id}" if is_selected else node_id
                 
                 if btn_cols[j].button(label, key=node_id):
@@ -42,10 +41,8 @@ for i, layer in enumerate(layers):
                         tgt = st.session_state.selected[1]
                         
                         # --- 規則校驗邏輯 ---
-                        # 示例：C 只能連 A 或 B
+                        # 範例：C 只能連 A 或 B
                         if src.startswith('C'):
-                            # 獲取 source 的座標
-                            # src 格式: C1.1
                             if not (tgt.startswith('A') or tgt.startswith('B')):
                                 st.error(f"❌ 連結無效！{src} 必須跟同層的 A 或 B 建立連結。")
                             else:
@@ -54,7 +51,8 @@ for i, layer in enumerate(layers):
                         else:
                             st.info(f"已記錄連線嘗試: {src} ➜ {tgt} (規則校驗擴充中...)")
                         
-                        st.session_state.selected = [] # 重置選擇
+                        # 重置選擇
+                        st.session_state.selected = [] 
 
 # 顯示目前的連線清單
 st.divider()
@@ -66,5 +64,3 @@ if st.sidebar.button("重置所有連線"):
     st.session_state.connections = []
     st.session_state.selected = []
     st.rerun()
-
-這份簡報與工具已經準備就緒，您可以根據實際需求微調 C->A 的嚴格座標匹配（例如 `A1.1` 只能由 `C1.1` 觸發）！如有任何細節想修改，隨時告訴我。
