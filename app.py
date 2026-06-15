@@ -1,103 +1,112 @@
 import streamlit as st
+import random
 
-st.set_page_config(layout="wide", page_title="Bio-Neural Simulator")
+st.set_page_config(layout="wide", page_title="Bio-Neural Simulator (Strict Rules)")
 
-st.title("🧠 仿生神經網路模擬器 (D 節點抑制反轉版)")
+st.title("🧠 仿生神經網路模擬器 (嚴格規則與隨機生成版)")
+st.write("已刪除冗餘節點 (D1, D2, A3)，並寫死連線規則。B 節點成為唯一交匯樞紐。")
 
 # ==========================================
-# 初始化 Session State
+# 初始化 Session State 與預設迴圈
 # ==========================================
 if 'selected' not in st.session_state:
     st.session_state.selected = []
 if 'connections' not in st.session_state:
+    # 載入你要求的基礎組合迴圈 (已自動補齊 C1->A1->B 的規則)
+    st.session_state.connections = [
+        ("外輸入來源", "外輸入1"),
+        ("外輸入1", "C1.1"),
+        ("C1.1", "A1.1"),      # 嚴格規則：C1 只能連 A1
+        ("A1.1", "B1"),        # 嚴格規則：A1 只能連 B
+        ("B1", "C2.1"),
+        ("C2.1", "A2.1"),
+        ("A2.1", "動器1"),
+        ("動器1", "外輸入來源"), # 改變環境
+        ("動器1", "內輸入1"),   # 行動後產生內在回饋
+        ("內輸入1", "C3.1"),
+        ("C3.1", "D3.1"),
+        ("D3.1", "B1")         # 理智去干預 B1
+    ]
+
+# ==========================================
+# 嚴格連線規則校驗器 (寫死規則)
+# ==========================================
+def validate_connection(src, tgt):
+    # 外部環境與內在動機
+    if src == "外輸入來源" and tgt.startswith("外輸入"): return True
+    if src.startswith("外輸入") and tgt.startswith("C1"): return True
+    if src.startswith("內輸入") and tgt.startswith("C3"): return True
+    if src.startswith("動器"): return True # 動器可以連回輸入源
+    
+    # Layer 1 規則
+    if src.startswith("C1") and tgt.startswith("A1"): return True
+    if src.startswith("A1") and tgt.startswith("B"): return True
+    
+    # Layer 3 規則
+    if src.startswith("C3") and tgt.startswith("D3"): return True
+    if src.startswith("D3") and tgt.startswith("B"): return True
+    
+    # Layer 2 規則
+    if src.startswith("B") and tgt.startswith("C2"): return True
+    if src.startswith("C2") and tgt.startswith("A2"): return True
+    if src.startswith("A2") and tgt.startswith("動器"): return True
+    
+    return False
+
+# ==========================================
+# 隨機生成合法網路功能
+# ==========================================
+def generate_random_network():
     st.session_state.connections = []
-if 'node_states' not in st.session_state:
-    st.session_state.node_states = {} # 記錄所有節點的狀態 (0 或 1)
-
-mode = st.radio("切換系統模式：", ["🛠️ 編輯模式 (建立/刪除連線)", "⚡ 運行模式 (發送刺激訊號)"], horizontal=True)
-st.divider()
-
-# --- 輔助函式：建立神經網路圖 (Adjacency List) ---
-def build_graph():
-    graph = {}
-    for src, tgt in st.session_state.connections:
-        if src not in graph:
-            graph[src] = []
-        graph[src].append(tgt)
-    return graph
-
-# --- 輔助函式：觸發訊號傳遞與 D 節點反轉 ---
-def trigger_signal(start_node):
-    graph = build_graph()
+    nodes_c1 = ["C1.1", "C1.2", "C1.3"]
+    nodes_a1 = ["A1.1", "A1.2", "A1.3"]
+    nodes_c3 = ["C3.1", "C3.2", "C3.3"]
+    nodes_d3 = ["D3.1", "D3.2", "D3.3"]
+    nodes_b  = ["B1", "B2", "B3"]
+    nodes_c2 = ["C2.1", "C2.2", "C2.3"]
+    nodes_a2 = ["A2.1", "A2.2", "A2.3"]
+    acts = ["動器1", "動器2"]
     
-    # 點擊來源節點時，強制翻轉其狀態
-    st.session_state.node_states[start_node] = 1 - st.session_state.node_states.get(start_node, 0)
-    
-    visited = set([start_node])
-    queue = [start_node]
-    
-    while queue:
-        curr = queue.pop(0)
-        curr_state = st.session_state.node_states.get(curr, 0)
+    # 隨機產生 2~4 條本能路徑 (L1 -> B)
+    for _ in range(random.randint(2, 4)):
+        c1, a1, b = random.choice(nodes_c1), random.choice(nodes_a1), random.choice(nodes_b)
+        st.session_state.connections.extend([("外輸入來源", "外輸入1"), ("外輸入1", c1), (c1, a1), (a1, b)])
         
-        # 核心生理邏輯：只有當前節點處於「激發 (1)」狀態時，才會向下游發送訊號
-        if curr_state == 1:
-            for neighbor in graph.get(curr, []):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    
-                    # 判斷訊號來源的屬性
-                    if curr.startswith('D'):
-                        # 🔴 D 節點專屬邏輯：反轉/抑制。強制將下游目標歸零
-                        st.session_state.node_states[neighbor] = 0
-                    else:
-                        # 🟢 標準節點邏輯：興奮/翻轉。讓下游目標從 0 變 1
-                        tgt_state = st.session_state.node_states.get(neighbor, 0)
-                        st.session_state.node_states[neighbor] = 1 - tgt_state
-                        
-                    # 將被影響的下游節點加入佇列，繼續傳導
-                    queue.append(neighbor)
+    # 隨機產生 1~3 條理智路徑 (L3 -> B)
+    for _ in range(random.randint(1, 3)):
+        c3, d3, b = random.choice(nodes_c3), random.choice(nodes_d3), random.choice(nodes_b)
+        st.session_state.connections.extend([("內輸入1", c3), (c3, d3), (d3, b)])
+        
+    # 將有收到訊號的 B 往下連到動器
+    active_bs = set([tgt for src, tgt in st.session_state.connections if tgt.startswith("B")])
+    for b in active_bs:
+        c2, a2, act = random.choice(nodes_c2), random.choice(nodes_a2), random.choice(acts)
+        st.session_state.connections.extend([(b, c2), (c2, a2), (a2, act)])
+    
+    # 去除重複連線
+    st.session_state.connections = list(dict.fromkeys(st.session_state.connections))
 
-# --- 輔助函式：渲染可點擊的節點 ---
+# ==========================================
+# 介面渲染
+# ==========================================
 def render_node(node_id, label_prefix=""):
-    if node_id not in st.session_state.node_states:
-        st.session_state.node_states[node_id] = 0
-        
-    state = st.session_state.node_states[node_id]
+    is_selected = node_id in st.session_state.selected
+    display_label = f"🎯 [選定] {label_prefix}{node_id}" if is_selected else f"{label_prefix}{node_id}"
+    btn_type = "primary" if is_selected else "secondary"
     
-    if mode == "🛠️ 編輯模式 (建立/刪除連線)":
-        is_selected = node_id in st.session_state.selected
-        display_label = f"🎯 [選定] {label_prefix}{node_id}" if is_selected else f"{label_prefix}{node_id}"
-        btn_type = "primary" if is_selected else "secondary"
-        
-        if st.button(display_label, key=f"edit_{node_id}", type=btn_type, use_container_width=True):
-            st.session_state.selected.append(node_id)
-            if len(st.session_state.selected) == 2:
-                src = st.session_state.selected[0]
-                tgt = st.session_state.selected[1]
+    if st.button(display_label, key=node_id, type=btn_type, use_container_width=True):
+        st.session_state.selected.append(node_id)
+        if len(st.session_state.selected) == 2:
+            src, tgt = st.session_state.selected[0], st.session_state.selected[1]
+            if validate_connection(src, tgt):
                 if (src, tgt) not in st.session_state.connections:
                     st.session_state.connections.append((src, tgt))
                     st.success(f"✅ 已建立連結: {src} ➜ {tgt}")
-                else:
-                    st.warning(f"⚠️ 連結已經存在囉！")
-                st.session_state.selected = []
-                st.rerun()
-
-    else:
-        # ⚡ 運行模式
-        btn_type = "primary" if state == 1 else "secondary"
-        display_label = f"{label_prefix}{node_id} ({state})"
-        
-        if st.button(display_label, key=f"run_{node_id}", type=btn_type, use_container_width=True):
-            if node_id == "外輸入來源" or node_id == "內輸入1":
-                trigger_signal(node_id)
-                st.rerun()
             else:
-                st.info("請點擊『外輸入來源』或『內輸入1』來發起連鎖反應！")
+                st.error(f"❌ 違反嚴格規則！無法建立 {src} ➜ {tgt} 的連線。")
+            st.session_state.selected = []
+            st.rerun()
 
-# ==========================================
-# 介面佈局
-# ==========================================
 left_col, center_col, right_col = st.columns([1.5, 6, 1.5])
 
 with left_col:
@@ -107,36 +116,44 @@ with left_col:
     render_node("外輸入1", "📥 ")
 
 with center_col:
-    layers = [1, 2, 3]
-    layer_cols = st.columns(3)
-    for i, layer in enumerate(layers):
-        with layer_cols[i]:
-            st.subheader(f"Layer {layer}")
-            st.markdown("**B (Binding / 樞紐)**")
-            b_cols = st.columns(2)
-            with b_cols[0]: render_node(f"B{layer}.1")
-            with b_cols[1]: render_node(f"B{layer}.2")
-            
-            st.divider()
-            st.markdown("**C / A / D (處理核心)**")
-            render_node(f"C{layer}.1", "🟡 ")
-            render_node(f"A{layer}.1", "🔴 ")
-            render_node(f"D{layer}.1", "🟣 ")
+    # 依照新規則，只顯示合法的節點
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.subheader("Layer 1 (感覺/衝動)")
+        for i in range(1, 4): render_node(f"C1.{i}", "🟡 ")
+        st.divider()
+        for i in range(1, 4): render_node(f"A1.{i}", "🔴 ")
+        
+    with col2:
+        st.subheader("B (整合樞紐)")
+        for i in range(1, 4): render_node(f"B{i}", "🌐 ")
+        st.divider()
+        st.subheader("Layer 2 (運動/執行)")
+        for i in range(1, 4): render_node(f"C2.{i}", "🟡 ")
+        st.divider()
+        for i in range(1, 4): render_node(f"A2.{i}", "🔴 ")
+
+    with col3:
+        st.subheader("Layer 3 (認知/抑制)")
+        for i in range(1, 4): render_node(f"C3.{i}", "🟡 ")
+        st.divider()
+        for i in range(1, 4): render_node(f"D3.{i}", "🟣 ")
 
 with right_col:
     st.subheader("💭 內在訊號")
     render_node("內輸入1", "🧠 ")
 
 st.divider()
-space_l, act_col, space_r = st.columns([3, 2, 3])
-with act_col:
-    render_node("動器1", "🦾 ")
+space_l, act1_col, act2_col, space_r = st.columns([2, 2, 2, 2])
+with act1_col: render_node("動器1", "🦾 ")
+with act2_col: render_node("動器2", "🦾 ")
 
 # ==========================================
 # 動態拓撲圖與側邊欄管理
 # ==========================================
 st.divider()
-st.subheader("📊 動態拓撲圖")
+st.subheader("📊 嚴格架構拓撲圖")
 
 if st.session_state.connections:
     mermaid_code = "graph TD\n"
@@ -146,17 +163,19 @@ if st.session_state.connections:
     st.markdown(f"```mermaid\n{mermaid_code}\n```")
 
 st.sidebar.header("🔗 當前連線管理")
-if mode == "🛠️ 編輯模式 (建立/刪除連線)":
-    for conn in list(st.session_state.connections):
-        col1, col2 = st.sidebar.columns([4, 1])
-        col1.text(f"{conn[0]} ➜ {conn[1]}")
-        if col2.button("❌", key=f"del_{conn[0]}_{conn[1]}"):
-            st.session_state.connections.remove(conn)
-            st.rerun()
+for conn in list(st.session_state.connections):
+    col1, col2 = st.sidebar.columns([4, 1])
+    col1.text(f"{conn[0]} ➜ {conn[1]}")
+    if col2.button("❌", key=f"del_{conn[0]}_{conn[1]}"):
+        st.session_state.connections.remove(conn)
+        st.rerun()
 
 st.sidebar.divider()
-if st.sidebar.button("清空所有連線與狀態", type="primary"):
+if st.sidebar.button("🎲 隨機生成合法網路", type="primary"):
+    generate_random_network()
+    st.rerun()
+
+if st.sidebar.button("清空畫布"):
     st.session_state.connections = []
     st.session_state.selected = []
-    st.session_state.node_states = {}
     st.rerun()
